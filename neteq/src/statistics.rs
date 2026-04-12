@@ -360,6 +360,7 @@ impl StatisticsCalculator {
     pub fn jitter_buffer_delay(&mut self, delay_ms: u64, emitted_samples: u64) {
         self.lifetime_stats.jitter_buffer_delay_ms += delay_ms;
         self.lifetime_stats.jitter_buffer_emitted_count += emitted_samples;
+        self.total_output_samples += emitted_samples;
     }
 
     /// Record concealment event
@@ -374,9 +375,6 @@ impl StatisticsCalculator {
 
     /// Record time-stretching operation
     pub fn time_stretch_operation(&mut self, operation: TimeStretchOperation, samples: u64) {
-        // Track total output samples for rate calculations
-        self.total_output_samples += samples;
-
         match operation {
             TimeStretchOperation::Accelerate => {
                 self.lifetime_stats.removed_samples_for_acceleration += samples;
@@ -627,8 +625,7 @@ mod tests {
 
         // Simulate normal operation: 10 frames of normal audio (160 samples each)
         for _ in 0..10 {
-            stats.time_stretch_operation(TimeStretchOperation::Accelerate, 160);
-            // Not expand, just to track output
+            stats.jitter_buffer_delay(10, 160);
         }
 
         // Reset accelerate stats to focus on expand rate
@@ -636,7 +633,9 @@ mod tests {
         stats.lifetime_stats.removed_samples_for_acceleration = 0;
 
         // Simulate 2 expand operations (160 samples each)
+        stats.jitter_buffer_delay(10, 160);
         stats.time_stretch_operation(TimeStretchOperation::Expand, 160);
+        stats.jitter_buffer_delay(10, 160);
         stats.time_stretch_operation(TimeStretchOperation::Expand, 160);
 
         // Total: 1600 + 320 = 1920 output samples
@@ -668,7 +667,7 @@ mod tests {
 
         // First, some normal operation
         for _ in 0..5 {
-            stats.time_stretch_operation(TimeStretchOperation::Accelerate, 160);
+            stats.jitter_buffer_delay(10, 160);
         }
 
         // Reset to focus on expansion
@@ -676,6 +675,7 @@ mod tests {
         stats.lifetime_stats.removed_samples_for_acceleration = 0;
 
         // Expansion happens (this used to set expand_rate = 7864.0)
+        stats.jitter_buffer_delay(30, 480);
         stats.time_stretch_operation(TimeStretchOperation::Expand, 480); // 30ms at 16kHz
 
         // With the fix, the rate should be reasonable
