@@ -915,6 +915,14 @@ impl NetEq {
     ) {
         self.decoders.insert(payload_type, decoder);
     }
+
+    /// Reset the history of every registered decoder without reallocating it.
+    pub fn reset_decoders(&mut self) -> Result<()> {
+        for decoder in self.decoders.values_mut() {
+            decoder.reset()?;
+        }
+        Ok(())
+    }
 }
 
 // Simple random number generator for testing

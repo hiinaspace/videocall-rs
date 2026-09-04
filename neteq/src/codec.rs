@@ -30,6 +30,13 @@ pub trait AudioDecoder {
 
     /// Decodes a single audio packet.
     fn decode(&mut self, encoded: &[u8]) -> Result<Vec<f32>>;
+
+    /// Reset codec history before this decoder is assigned to a new stream.
+    ///
+    /// Stateless decoders may keep the default no-op implementation.
+    fn reset(&mut self) -> Result<()> {
+        Ok(())
+    }
 }
 
 // Platform-specific codec implementations
