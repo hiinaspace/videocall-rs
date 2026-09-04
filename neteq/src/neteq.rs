@@ -311,8 +311,12 @@ impl NetEq {
 
         // Normal NetEQ processing
         // Update delay manager
-        self.delay_manager
-            .update(packet.header.timestamp, packet.sample_rate, false)?;
+        self.delay_manager.update(
+            packet.header.timestamp,
+            packet.sample_rate,
+            packet.arrival_time,
+            false,
+        )?;
 
         // Insert packet into buffer
         let target_delay = self.delay_manager.target_delay_ms();
@@ -975,6 +979,37 @@ mod tests {
         neteq.insert_packet(packet).unwrap();
 
         assert!(!neteq.is_empty());
+    }
+
+    #[test]
+    fn test_delay_estimator_uses_packet_arrival_time() {
+        let config = NetEqConfig {
+            min_delay_ms: 20,
+            max_delay_ms: 250,
+            ..Default::default()
+        };
+        let mut neteq = NetEq::new(config).unwrap();
+        let first_arrival = Instant::now().checked_sub(Duration::from_secs(2)).unwrap();
+
+        // Model a listener task processing on-time packets around a short run
+        // of scheduler stalls. The transport-provided arrival timestamps
+        // retain their 10 ms cadence while insertion is temporarily delayed.
+        for index in 0_u16..60 {
+            if (1..=9).contains(&index) {
+                sleep(Duration::from_millis(60));
+            }
+            let mut packet = create_test_packet(index, index as u32 * 160, 10);
+            packet.arrival_time = first_arrival
+                .checked_add(Duration::from_millis(index as u64 * 10))
+                .unwrap();
+            neteq.insert_packet(packet).unwrap();
+        }
+
+        assert_eq!(
+            neteq.target_delay_ms(),
+            20,
+            "listener scheduling stalls were misclassified as network jitter"
+        );
     }
 
     #[test]

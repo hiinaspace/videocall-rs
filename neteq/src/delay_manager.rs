@@ -122,7 +122,9 @@ impl RelativeArrivalDelayTracker {
 
         // Calculate actual time since last packet
         let actual_iat_ms = if let Some(last_time) = self.last_packet_time {
-            arrival_time.duration_since(last_time).as_millis() as i32
+            arrival_time
+                .saturating_duration_since(last_time)
+                .as_millis() as i32
         } else {
             0
         };
@@ -133,7 +135,7 @@ impl RelativeArrivalDelayTracker {
         self.last_packet_time = Some(arrival_time);
 
         // Update delay history
-        self.update_delay_history(iat_delay_ms, timestamp, sample_rate);
+        self.update_delay_history(iat_delay_ms, timestamp, sample_rate, arrival_time);
 
         // Calculate relative packet arrival delay
         let relative_delay = self.calculate_relative_packet_arrival_delay();
@@ -152,21 +154,25 @@ impl RelativeArrivalDelayTracker {
         self.last_packet_time = None;
     }
 
-    fn update_delay_history(&mut self, iat_delay_ms: i32, timestamp: u32, _sample_rate: u32) {
+    fn update_delay_history(
+        &mut self,
+        iat_delay_ms: i32,
+        timestamp: u32,
+        _sample_rate: u32,
+        arrival_time: Instant,
+    ) {
         let packet_delay = PacketDelay {
             iat_delay_ms,
             _timestamp: timestamp,
-            arrival_time: Instant::now(),
+            arrival_time,
         };
 
         self.delay_history.push_back(packet_delay);
 
         // Remove old entries based on max_history_ms
         let max_age = Duration::from_millis(self.config.max_history_ms as u64);
-        let now = Instant::now();
-
         self.delay_history
-            .retain(|delay| now.duration_since(delay.arrival_time) <= max_age);
+            .retain(|delay| arrival_time.saturating_duration_since(delay.arrival_time) <= max_age);
     }
 
     /// Calculates the relative arrival delay of packets in the history.
@@ -237,12 +243,16 @@ impl DelayManager {
     }
 
     /// Update the delay manager with a new packet
-    pub fn update(&mut self, timestamp: u32, sample_rate: u32, reset: bool) -> Result<()> {
+    pub fn update(
+        &mut self,
+        timestamp: u32,
+        sample_rate: u32,
+        arrival_time: Instant,
+        reset: bool,
+    ) -> Result<()> {
         if reset {
             self.reset();
         }
-
-        let arrival_time = Instant::now();
 
         // Update arrival delay tracking
         let relative_delay =
@@ -253,7 +263,9 @@ impl DelayManager {
         // resampling helps by calculating the max over some time period.
         if let Some(resample_interval_ms) = self.config.resample_interval_ms {
             if let Some(last_resample_time) = self.last_resample_time {
-                let elapsed_ms = arrival_time.duration_since(last_resample_time).as_millis() as u32;
+                let elapsed_ms = arrival_time
+                    .saturating_duration_since(last_resample_time)
+                    .as_millis() as u32;
                 if elapsed_ms >= resample_interval_ms {
                     self.register_relative_delay(self.resampled_relative_delay);
                     self.resampled_relative_delay = 0;
@@ -410,7 +422,9 @@ mod tests {
                 thread::sleep(Duration::from_millis(5));
             }
 
-            delay_manager.update(timestamp, sample_rate, false).unwrap();
+            delay_manager
+                .update(timestamp, sample_rate, Instant::now(), false)
+                .unwrap();
             timestamp += 320; // 20ms at 16kHz
         }
 
@@ -474,8 +488,12 @@ mod tests {
         let mut delay_manager = DelayManager::new(config);
 
         // Update with some packets
-        delay_manager.update(0, 16000, false).unwrap();
-        delay_manager.update(320, 16000, false).unwrap();
+        delay_manager
+            .update(0, 16000, Instant::now(), false)
+            .unwrap();
+        delay_manager
+            .update(320, 16000, Instant::now(), false)
+            .unwrap();
 
         // Reset and check state
         delay_manager.reset();
