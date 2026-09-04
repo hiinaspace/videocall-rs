@@ -261,6 +261,7 @@ impl DelayManager {
 
         // When jitter is high, relative_delay fluctuates between high and near 0 values.
         // resampling helps by calculating the max over some time period.
+        let mut registered_delay = false;
         if let Some(resample_interval_ms) = self.config.resample_interval_ms {
             if let Some(last_resample_time) = self.last_resample_time {
                 let elapsed_ms = arrival_time
@@ -268,6 +269,7 @@ impl DelayManager {
                     .as_millis() as u32;
                 if elapsed_ms >= resample_interval_ms {
                     self.register_relative_delay(self.resampled_relative_delay);
+                    registered_delay = true;
                     self.resampled_relative_delay = 0;
 
                     // Round down to nearest multiples, so the interval doesn't drift.
@@ -283,9 +285,15 @@ impl DelayManager {
             self.resampled_relative_delay = self.resampled_relative_delay.max(relative_delay);
         } else {
             self.register_relative_delay(relative_delay);
+            registered_delay = true;
         }
 
-        self.update_target_delay();
+        // The histogram's initial distribution is not an observation. Preserve
+        // the configured start delay until the first resampling interval has
+        // produced a real delay sample.
+        if registered_delay {
+            self.update_target_delay();
+        }
 
         Ok(())
     }

@@ -982,6 +982,20 @@ mod tests {
     }
 
     #[test]
+    fn test_first_packet_preserves_start_delay() {
+        let config = NetEqConfig {
+            min_delay_ms: 20,
+            max_delay_ms: 250,
+            ..Default::default()
+        };
+        let mut neteq = NetEq::new(config).unwrap();
+
+        neteq.insert_packet(create_test_packet(1, 0, 10)).unwrap();
+
+        assert_eq!(neteq.target_delay_ms(), 80);
+    }
+
+    #[test]
     fn test_delay_estimator_uses_packet_arrival_time() {
         let config = NetEqConfig {
             min_delay_ms: 20,
