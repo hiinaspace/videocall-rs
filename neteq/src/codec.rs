@@ -42,7 +42,7 @@ pub trait AudioDecoder {
 // Platform-specific codec implementations
 #[cfg(feature = "web")]
 mod browser_detect;
-#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "native-codec"))]
 mod native_opus;
 #[cfg(feature = "web")]
 mod safari_decoder;
@@ -57,20 +57,20 @@ pub use safari_decoder::SafariOpusDecoder;
 pub use webcodecs_decoder::WebCodecsAudioDecoder;
 
 // Always export NativeOpusDecoder for native targets
-#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "native-codec"))]
 pub use native_opus::NativeOpusDecoder;
 
 #[cfg(not(feature = "web"))]
 pub use wasm_stub::*;
 
 // Stub implementation for when native feature is not available
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "native")))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "native-codec")))]
 pub struct StubOpusDecoder {
     sample_rate: u32,
     channels: u8,
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "native")))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "native-codec")))]
 impl StubOpusDecoder {
     pub fn new(sample_rate: u32, channels: u8) -> Result<Self> {
         log::warn!("Using stub Opus decoder - no actual decoding will occur");
@@ -81,7 +81,7 @@ impl StubOpusDecoder {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "native")))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "native-codec")))]
 impl AudioDecoder for StubOpusDecoder {
     fn sample_rate(&self) -> u32 {
         self.sample_rate
@@ -199,9 +199,9 @@ impl AudioDecoder for UnifiedOpusDecoder {
 #[cfg(target_arch = "wasm32")]
 pub type OpusDecoder = UnifiedOpusDecoder;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "native"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "native-codec"))]
 pub type OpusDecoder = native_opus::NativeOpusDecoder;
 
 // For non-wasm32 targets without native feature, use stub
-#[cfg(all(not(target_arch = "wasm32"), not(feature = "native")))]
+#[cfg(all(not(target_arch = "wasm32"), not(feature = "native-codec")))]
 pub type OpusDecoder = StubOpusDecoder;
